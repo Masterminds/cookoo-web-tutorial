@@ -31,3 +31,5 @@ program.
 will not only show up in the text and code, but also in the `Godeps`
 file. So for any chapter, running `gpm install` should get your
 dependencies all configured for you.
+
+[git checkout 3_Hello_World](https://github.com/Masterminds/cookoo-web-tutorial/tree/3_Hello_World)
