@@ -8,7 +8,9 @@ chain-of-command library written in Go. In a nutshell, it is designed to help
 you map a *route name* to a *chain of sequentially-run commands*.
 
 A *route*, in Cookoo, can be thought of as a specific task to be done.
-Let's give a really lame example:
+Let's give a really lame example.
+
+## Really Lame Example
 
 > Task: Make a peanut butter and jelly sandwhich
 
