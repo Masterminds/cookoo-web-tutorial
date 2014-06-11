@@ -36,6 +36,8 @@ func main() {
 often a good idea to take a quick look at the source to see the example
 in context.
 
+## Cookoo! Cookoo!
+
 The first thing `main` does is get all the pieces necessary for a Cookoo
 app. As a joke, the authors of Cookoo made the main app creation
 function `cookoo.Cookoo()` (like a cookoo clock). That's how we get a
@@ -49,6 +51,8 @@ handle on the three major pieces of any cookoo app:
 
 We'll look at these in detail as we go along. In the example above we
 can see two things.
+
+## Adding a Route
 
 First, we build a route to execute:
 
