@@ -8,4 +8,8 @@ the tutorial on GitHub, you can use the `branch` drop-down list to
 select your chapter. Or you can clone this entire tutorial and navigate
 along using your favorite Git client.
 
+This file, `README.md`, will always be the main text of each chapter. As
+we go, we'll also be adding code to the repository alongside the
+`README.md`, so make sure you take a look around each branch.
+
 To begin, select the **Chapter 1** branch.
