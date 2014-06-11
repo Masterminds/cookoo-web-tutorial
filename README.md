@@ -31,3 +31,5 @@ For this tutorial, the focus will be on creating **web apps with
 Cookoo**.
 
 In the next part we'll set up Cookoo.
+
+[git checkout 2_Setup](https://github.com/Masterminds/cookoo-web-tutorial/tree/2_Setup)
