@@ -1,4 +1,4 @@
-# 3. Hello Web
+# 4. Hello Web
 
 Now that we have seen a basic Cookoo app we can start building a web
 application. Cookoo comes with the tools needed to quickly set up a web
