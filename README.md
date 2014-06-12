@@ -1,21 +1,11 @@
-# 3. Hello World
+# 3. Hello Web
 
-Now for that glorious chapter we've all been waiting for! It's time to
-build a *hello world* server!
+Now that we have seen a basic Cookoo app we can start building a web
+application. Cookoo comes with the tools needed to quickly set up a web
+server.
 
-This is the only non-Web app we are going to see. It's here just to
-introduce Cookoo.
-
-We can start out by running `app.go`, and then work backward from there.
-
-```
-$ go run app.go
-info2014/06/11 00:54:14 Hello World
-```
-
-We just ran a program that logs the message "Hello World".
-
-Now let's take a look at this program's `main` function:
+At a glance, the `main` function in our new webserver will not look much
+different from the `Hello World` version we saw in the last chapter.
 
 ```go
 func main() {
@@ -23,75 +13,93 @@ func main() {
 	registry, router, context := cookoo.Cookoo()
 
 	// Add one route to this app.
-	registry.Route("hello", "Print Hello World").
-		Does(cookoo.LogMessage, "out").
-		Using("msg").WithDefault("Hello World")
+	registry.Route("GET /", "Print Hello Web").
+		Does(web.Flush, "out").
+		Using("content").WithDefault("Hello Web")
 
-	// Run that route.
-	router.HandleRequest("hello", context, true)
+	// Synchronize access to the context.
+	context = cookoo.SyncContext(context)
+
+	// Start a server
+	web.Serve(registry, router, context)
 }
 ```
 
-**Note:** We rarely walk through all of the code in a branch, so it's
-often a good idea to take a quick look at the source to see the example
-in context.
+The shape of the app is the same, but we handle a few things
+differently. Let's start by looking at our new route declaration.
 
-## Cookoo! Cookoo!
+## A First Web Route
 
-The first thing `main` does is get all the pieces necessary for a Cookoo
-app. As a joke, the authors of Cookoo made the main app creation
-function `cookoo.Cookoo()` (like a cookoo clock). That's how we get a
-handle on the three major pieces of any cookoo app:
+We've made a few changes to the route.
 
-* The registry: This is where we register routes and tell Cookoo what
-  each route does.
-* The router: This is responsible for executing routes.
-* The context: This is the data container that stores information as a
-  route executes.
+First, there is the route name. In the previous example, we named the
+route `hello`. And when we executed it, we used
+`router.HandleRequest('hello', context, true)`.
 
-We'll look at these in detail as we go along. In the example above we
-can see two things.
+When writing web apps, we use the route name to indicate the HTTP
+request. In this case, we've named it `GET /`, which means "any get
+request to the webserver's root directory."
 
-## Adding a Route
+Second, where we formerly wrote `Hello World` as a log message, now we're
+using the `coookoo/web.Flush` command. This is a general-purpose command
+for sending data to an HTTP client.
 
-First, we build a route to execute:
+## Synchronizing the Context
 
-```go
-registry.Route("hello", "Print Hello World").
-  Does(cookoo.LogMessage, "out").
-		Using("msg").WithDefault("Hello World")
-```
+One new addition we made is, strictly speaking, not necessary. But it is
+a good idea. We are synchronizing access to the `context`.
 
-By line, here's what the above does:
+We do this so that if a command executes a goroutine, the context will
+be safe from race conditions.
 
-1. Create a new `Route` called `hello`. Cookoo can be configured to be
-   self-documenting, so every route requires a short description (`Print
-   Hello World`).
-2. Add a step to this route. This step executes the command
-   `cookoo.LogMessage`. A command has a name, which other parts of the
-   route may later. In our example, it is named `out`.
-3. On the third line we pass some information into the `LogMessage`
-   command. Specifically, we tell it the message to log (`msg`) is just
-   `Hello World`. Later we'll see some cool ways of passing more complex
-   data into a `Using` clause.
+Honestly, our simple `Hello Web` server will not ever have race
+conditions, so we could skip synchronization. However, since
+synchronizing the context is considered the best practice, I've left
+this step in.
 
-So the above says that when the app runs the `hello` route, a log
-message should be written with the message `Hello World`. And that's
-exactly what we saw in the opening example.
+## Starting the Server
 
-## Running a Route
-
-The last line of our `main` function runs the route:
+The last step in creating our simple Cookoo web app is creating the HTTP
+server:
 
 ```go
-router.HandleRequest("hello", context, true)
+web.Serve(registry, router, context)
 ```
 
-The above tells the router to handle a request named `hello` (the route
-we created above) using the given base `context`. The final param
-indicates whether the route is "tainted". If this is set to `true`, the
-router won't let certain requests be executed. In our example, though,
-it makes absolutely no difference in functionality.
+This piece is straightforward: We pass the registry, router, and context
+into the a server and let it do its thing.
 
-So now we have our first simple Cookoo example. Let's turn it into a web
-server.
+The `context` that is passed into `web.Serve` is actually not the
+context that individual routes will access. Instead, it is treated as
+the base context. Each time a new request comes in, this context will be
+copied and that copy will serve as the request-specific context.
+
+## Running the Server
+
+We can start the server with `go run app.go`. And then we can run a
+simple `curl` request to see what our new server does:
+
+```
+$ curl -v localhost:8080/
+> GET / HTTP/1.1
+> User-Agent: curl/7.30.0
+> Host: localhost:8080
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< Content-Type: text/plain; charset=utf-8
+< Date: Thu, 12 Jun 2014 04:45:03 GMT
+< Content-Length: 9
+<
+Hello Web
+```
+
+Our app behaves as expected: It sends a simple message back to `curl`:
+`Hello Web`. In a later chapter we will see how we can use templates to
+render HTML content and then send that back.
+
+Now we have a simple web server. You can stop the server by hitting
+`CTRL-C`.
+
+In the next chapter we will look at building different kinds of paths,
+including using other verbs like `POST` and using wildcards.

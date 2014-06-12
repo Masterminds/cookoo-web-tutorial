@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/Masterminds/cookoo"
+	"github.com/Masterminds/cookoo/web"
 )
 
 func main() {
@@ -9,10 +10,13 @@ func main() {
 	registry, router, context := cookoo.Cookoo()
 
 	// Add one route to this app.
-	registry.Route("hello", "Print Hello World").
-		Does(cookoo.LogMessage, "out").
-		Using("msg").WithDefault("Hello World")
+	registry.Route("GET /", "Print Hello Web").
+		Does(web.Flush, "out").
+		Using("content").WithDefault("Hello Web")
 
-	// Run that route.
-	router.HandleRequest("hello", context, true)
+	// Synchronize access to the context.
+	context = cookoo.SyncContext(context)
+
+	// Start a server
+	web.Serve(registry, router, context)
 }
