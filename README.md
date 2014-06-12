@@ -27,3 +27,31 @@ examples:
   that starts with `/goodbye/`. Examples:
   - `GET /goodbye/foo`
   - `GET /goodbye/foo/bar/baz`
+
+Take a moment to start up the server and try a few requests. Here's a
+basic `curl` command to get you started. (`-X` lets you tell curl what
+method you want to use):
+
+```
+$ curl -v -X POST localhost:8080/goodbye
+```
+
+As you test things out, you may discover that:
+
+1. Order is important. Since `/goodbye/*` comes before `/goodbye/**`, it
+   will be matched first.
+2. Cookoo will allow non-standard HTTP methods. This is great for
+   protocols like WebDAV that specify additional methods.
+3. Cookoo views slashes as important characters. Omitting them may have
+   consequences.
+
+If you're feeling wild, you can try building some patterns of your own.
+I suggest experimenting with something like this:
+
+```
+GET /t?st/*/science
+```
+
+**Tip:** Cookoo's path patching library supports POSIX-style regular
+expressions. Check out Go's `path.Match` function to get an idea for the
+syntax.
