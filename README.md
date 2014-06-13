@@ -1,166 +1,144 @@
-# 6. Request Data
+# 7. A First Command
 
-In this chapter we'll look at how to get data out of an HTTP request and
-pass it on to commands.
+In the past few chapters we have worked only with one or two built-in
+Cookoo commands -- mostly just `web.Flush`. In this section, we'll
+create our own command.
 
-To get there, we need to take another look at the way Cookoo passes data
-into commands.
-
-## "Does", "Using", and "WithDefault"
-
-Our working example thus far has been something like this:
+Commands are just functions that meet the definition of a
+`cookoo.Command`.
 
 ```go
-	registry.Route("GET /", "Print Hello Web").
-		Does(web.Flush, "out").
-		Using("content").WithDefault("Hello Web")
+type Command func(cxt Context, params *Params) (interface{}, Interrupt)
 ```
 
-We've seen already that...
+Commands get two arguments and return two results.
 
-* `Does()` specifies which command to run
-* `Using()` maps a parameter name, and...
-* `WithDefault()` gives that parameter a default value.
+**Arguments**
 
-So in the case of the above, we're calling Cookoo's `web.Flush()`
-command, which takes any of the following parameters:
+* `cxt`: The cookoo.Context that gets passed along a request. You can
+  use this to get or store data.
+* `params`: The `cookoo.Params` object, which has the data passed in
+  from the `Using().WithDefault().From()` chain.
 
-* `content`: The content to write to the web browser
-* `contentType`: The MIME type (`text/html`, `application/json`, etc.).
-* `responseCode`: The HTTP status code, as captured in Go's `net/http`
-  library.
-* `headers`: a `map[string]string` of HTTP headers
-* `writer`: A Go `io.Writer` if we want to send data somewhere besides
-  the web browser.
+** Return Values**
 
-In all of our examples above, we've had only one `Using()` call per
-command. However, if we wanted to use more than one, we could do so:
+* `interface{}`: Whatever return value you want this function to return.
+* `cookoo.Interrupt`: Any exceptional condition, including an `error`.
+  We'll take a look at this in more depth later.
+
+Let's look at the example in this branch.
+
+## The SayHello Command
+
+Here's our simple starter command.
+
+It takes one parameter (`who`) and returns the string `Hello %s`, where
+`%s` is replaced with the value of `who`.
 
 ```go
-	registry.Route("GET /", "Print Hello Web").
+func SayHello(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
+	// Get the value of the "who" parameter, or use "World" if none is set.
+	// We want it to be a string.
+	who := p.Get("who", "World").(string)
+
+	return fmt.Sprintf("Hello %s\n", who), nil
+}
+```
+
+Let's look at each of the two lines in the function's body:
+
+```go
+who := p.Get("who", "World").(string)
+```
+
+This sets the value of `who` to whatever value gets passed in from
+`Using().From().WithDefault()`, and it makes sure that this data is
+typed to a `string`.
+
+`p.Get()` takes two parameters. The first is the name of the param that
+we want to get. The second is a default value. (If this method doesn't
+tickle your fance, check out `p.Has()`, which does not return a default
+value.)
+
+The second line formats a string and returns it:
+
+```go
+return fmt.Sprintf("Hello %s\n", who), nil
+```
+
+Since we have no errors, we always return `string, nil`.
+
+## Wiring Up Our New Command
+
+Now we can use our command from within a route. Here's our old "hello
+web" example re-tooled to use our command:
+
+```go
+	registry.Route("GET /", "Print Hello to something").
+
+		Does(SayHello, "message").
+		Using("who").From("query:who").
+
 		Does(web.Flush, "out").
-		Using("content").WithDefault("Hello Web").
+		Using("content").From("cxt:message").
+		Using("contentType").WithDefault("text/plain")
+
+```
+
+I've added some empty lines to make it easier to visualize. Right now,
+the route `GET /` executes two commands in sequence:
+
+1. `SayHello`
+2. `web.Flush`
+
+Let's look at the spec for the first:
+
+```go
+		Does(SayHello, "message").
+		Using("who").From("query:who").
+```
+
+By now, this should be pretty straightforward. The `SayHello` command
+will be executed. The `who` parameter will
+get set to the value of the query param `?who=XXX`.
+
+But now something that was not important before is **very** important.
+*Now the name of the command matters.* By default, Cookoo will store the
+return value of a command inside of the `cookoo.Context`. And it's name
+will be the name of the command.
+
+So when `SayHello` executes, the return value will be put in
+`cxt:message` (since `SayHello`'s name is `message`).
+
+Now the second command will execute:
+
+```go
+		Does(web.Flush, "out").
+		Using("content").From("cxt:message").
 		Using("contentType").WithDefault("text/plain")
 ```
 
-Now the `web.Flush` command will use our values for both of those
-parameters.
+Notice the second line? We get `content` from `cxt:message`. So
+basically we are feeding data from the previous `SayHello` command into
+the `web.Flush` command.
 
-But in the example above, we're usign `WithDefault()` to send our
-specified default values. So `content` will *always* be `Hello Web`.
-What if instead we wanted to pass in some data generated elsewhere?
-
-## Using "From"
-
-Here's `Using()` can take values not only from `WithDefault()`, but also
-from `From()`.
-
-Technically speaking, `From()` formalizes a way to extract values from a
-`cookoo.KeyValueDatasource`. In practice, what that means is that we can
-retrieve values that were computed by other parts of Cookoo.
-
-Alright... enough talk. Let's see an example:
-
-```go
-	registry.Route("GET /", "Print Hello Web").
-		Does(web.Flush, "out").
-		Using("content").WithDefault("Hello Web").From("query:msg").
-		Using("contentType").WithDefault("text/plain")
-```
-
-The main change above is the addition of `.From("query:msg")`. In the
-Cookoo web library, `query` is the datasource that stores query
-parameters (a.k.a. GET params) in the URL. So the above tells Cookoo to
-get the `msg` value out of the query string.
-
-We can see this in action by running the server and then using Curl to
-send this request:
+Let's run it and see what happens.
 
 ```
-$ curl localhost:8080/?msg=Hi
-```
-
-(You might need to add a backslash before `?` for shell escaping.)
-
-The output of the above is: `Hi`.
-
-**Note:** The code above is *definitely not* secure. We're not filtering
-the content of `msg`.
-
-Behind the scenes, what's going on above is that Cookoo is handling the
-web request, putting all of the query parameters into the `query`
-datasource, and then running `web.Flush()`. It then takes the value of
-`From("query:msg")` and sets it as the value to `content`.
-
-Or, in short, it creates a name value pair from `content` to
-whatever is passed in `msg`.
-
-### And the default value...
-
-So what if we don't provide a `msg` in the query string?
-
-```
+$ curl localhost:8080/?who=You
+Hello You
 $ curl localhost:8080/
-Hello Web
+Hello World
 ```
 
-Without the query param, Cookoo calls back to the value specified in
-`WithDefault()`.
+Now we're starting to get into what makes Cookoo powerful: We can
+compose routes by chaining together commands. And just like we've used
+`web.Flush` over and over again, if we write our commands well we will
+be able to reuse them.
 
-## The Places You Can Get Things
+The second nicety of the chain of commands style is that we can see at a
+glance what each route does without having to dive any deeper than the
+route declarations.
 
-So we've seen how to get query parameters through `From()`. What else
-can we get that way?
-
-First and foremost, there's `cxt`: `From("cxt:foo")` will look in the
-context for a value. This is the most common way of using Cookoo's
-`From()` clause to pass data from one command to another, and we'll see
-it often from here on.
-
-Here are some of the others:
-
-* `url`: Grab various components out of the URL. For example, `url:Host`
-  gets the domain name. If you ever need raw query parameters, you can
-also use `url:RawQuery`.
-* `post`: Grab name/value pairs from POST data. This works just like
-  query, only it looks in decoded POST data.
-* `path`: Grab (by index) a part of a URL. For example, with route
-  `/foo/bar`, using `path:0` will fetch `foo` and `path:1` will get
-`bar`.
-
-## Using More Than One Source
-
-You can also pass multiple sources in a `From()` statement:
-
-```go
-registry.Route("GET /hello/*", "Print Hello Web").
-		Does(web.Flush, "out").
-		Using("content").From("cxt:msg query:msg path:1")
-```
-
-Here our `From()` has three sources. It will use the first non-Nil
-source that it finds.
-
-`cxt:msg` will always be empty (because we don't ever set it).
-`query:msg` will be set if we put it in the context, and `path:1` will
-be set from the second item in the path.
-
-```
-$ curl localhost:8080/hello/world?msg=Hi
-Hi
-$ curl localhost:8080/hello/world
-world
-```
-
-That's how Cookoo web applications can get data from their environment.
-
-**Note:** For a Cookoo web app, the `Context` object has some built-in
-values that you can get from `From()` calls:
-
-* `From("cxt:http.Request")`: The `net/http.Request` object.
-* `From("cxt:http.ResponseWriter")`: The `net/http.ResponseWriter` object.
-* `From("cxt:server.Address")`: The address of the currently running
-  server.
-
-In the next chapter we'll create a custom command and see how commands
-can be chained together on a route.
+In the next section, we'll look at how we can re-use route definitions
+themselves to simplify our chains.
