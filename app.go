@@ -12,36 +12,12 @@ func main() {
 	// Add one route to this app.
 	registry.Route("GET /", "Print Hello Web").
 		Does(web.Flush, "out").
-		Using("content").WithDefault("Hello Web")
+		Using("content").WithDefault("Hello Web").From("query:msg").
+		Using("contentType").WithDefault("text/plain")
 
-	registry.Route("GET /hello", "Print Hello").
+	registry.Route("GET /hello/*", "Print Hello Web").
 		Does(web.Flush, "out").
-		Using("content").WithDefault("Hello")
+		Using("content").From("cxt:msg query:msg path:1")
 
-	registry.Route("POST /hello", "Print Hello POST").
-		Does(web.Flush, "out").
-		Using("content").WithDefault("Hello POST")
-
-	registry.Route("* /goodbye", "Print Goodbye Web").
-		Does(web.Flush, "out").
-		Using("content").WithDefault("Goodbye Web")
-
-	registry.Route("GET /goodbye/*", "Print Goodbye").
-		Does(web.Flush, "out").
-		Using("content").WithDefault("Goodbye")
-
-	registry.Route("GET /goodbye/**", "Print Goodbye Everybody").
-		Does(web.Flush, "out").
-		Using("content").WithDefault("Goodbye Everybody")
-
-	// Bonus route! Try uncommenting this.
-	// registry.Route("* /t?st/*/science", "Print Science!").
-	//	Does(web.Flush, "out").
-	//	Using("content").WithDefault("Science")
-
-	// Synchronize access to the context.
-	context = cookoo.SyncContext(context)
-
-	// Start a server
 	web.Serve(registry, router, context)
 }
