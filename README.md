@@ -95,3 +95,5 @@ it makes absolutely no difference in functionality.
 
 So now we have our first simple Cookoo example. Let's turn it into a web
 server.
+
+[git checkout 4_Hello_Web](https://github.com/Masterminds/cookoo-web-tutorial/tree/4_Hello_Web)
