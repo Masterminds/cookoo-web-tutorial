@@ -67,8 +67,13 @@ context as name/value pairs. Every `Using().From().WithDefault()` clause
 attached to this command will result in a new pair being added to the
 context. It's a great way to populate a context with standard data.
 
-Go ahead and run the exampels above. At this point the outcome should be
+Go ahead and run the examples above. At this point the outcome should be
 predictable.
+
+**Note:** `Includes` can forward to any route, and is not actually
+restricted to only `@`-routes. However, by convention Cookoo web apps
+use `@`-routes to protect these partial routes from being accidentally
+directly accessed.
 
 Later we will see how our `@render` route can be used to encapsulate
 more complex logic -- in our case, rendering data through HTML
