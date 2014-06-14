@@ -142,3 +142,5 @@ route declarations.
 
 In the next section, we'll look at how we can re-use route definitions
 themselves to simplify our chains.
+
+[git checkout 8_Includes](https://github.com/Masterminds/cookoo-web-tutorial/tree/8_Includes)
