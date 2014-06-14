@@ -55,3 +55,5 @@ GET /t?st/*/science
 **Tip:** Cookoo's path patching library supports POSIX-style regular
 expressions. Check out Go's `path.Match` function to get an idea for the
 syntax.
+
+[git checkout 6_Request_Data](https://github.com/Masterminds/cookoo-web-tutorial/tree/6_Request_Data)
