@@ -164,3 +164,5 @@ values that you can get from `From()` calls:
 
 In the next chapter we'll create a custom command and see how commands
 can be chained together on a route.
+
+[git checkout 7_First_Command](https://github.com/Masterminds/cookoo-web-tutorial/tree/7_First_Command)
