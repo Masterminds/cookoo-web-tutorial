@@ -81,3 +81,5 @@ templates.
 
 But first we will take a look at another concept similar to `Includes`,
 and that is *route forwarding*.
+
+[git checkout 9_Forwarding](https://github.com/Masterminds/cookoo-web-tutorial/tree/9_Forwarding)
