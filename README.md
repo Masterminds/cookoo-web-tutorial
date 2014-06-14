@@ -103,3 +103,5 @@ Now we have a simple web server. You can stop the server by hitting
 
 In the next chapter we will look at building different kinds of paths,
 including using other verbs like `POST` and using wildcards.
+
+[git checkout 5_Routes](https://github.com/Masterminds/cookoo-web-tutorial/tree/5_Routes)
