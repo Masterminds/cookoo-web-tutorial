@@ -1,144 +1,78 @@
-# 7. A First Command
+# 8. Includes
 
-In the past few chapters we have worked only with one or two built-in
-Cookoo commands -- mostly just `web.Flush`. In this section, we'll
-create our own command.
+In the last chapter we saw how to create a route with more than one
+command. In this chapter we will look at another aspect of building
+chains of commands: including routes.
 
-Commands are just functions that meet the definition of a
-`cookoo.Command`.
+## A Basic Include Route
 
-```go
-type Command func(cxt Context, params *Params) (interface{}, Interrupt)
-```
-
-Commands get two arguments and return two results.
-
-**Arguments**
-
-* `cxt`: The cookoo.Context that gets passed along a request. You can
-  use this to get or store data.
-* `params`: The `cookoo.Params` object, which has the data passed in
-  from the `Using().WithDefault().From()` chain.
-
-** Return Values**
-
-* `interface{}`: Whatever return value you want this function to return.
-* `cookoo.Interrupt`: Any exceptional condition, including an `error`.
-  We'll take a look at this in more depth later.
-
-Let's look at the example in this branch.
-
-## The SayHello Command
-
-Here's our simple starter command.
-
-It takes one parameter (`who`) and returns the string `Hello %s`, where
-`%s` is replaced with the value of `who`.
+In the `app.go` for this chapter, the first route looks like this:
 
 ```go
-func SayHello(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
-	// Get the value of the "who" parameter, or use "World" if none is set.
-	// We want it to be a string.
-	who := p.Get("who", "World").(string)
-
-	return fmt.Sprintf("Hello %s\n", who), nil
-}
+// An internal route that cannot be accessed directly.
+registry.Route("@render", "Send a message to browser.").
+  Does(web.Flush, "out").
+  Using("content").From("cxt:message").
+  Using("contentType").WithDefault("text/plain")
 ```
 
-Let's look at each of the two lines in the function's body:
+Notice that the name of this route is not a URI-like path. It begins
+with an `@`, and has no path. This is an internal route. Internal routes
+cannot be accessed directly. They can only be the target of includes and
+redirects.
 
-```go
-who := p.Get("who", "World").(string)
-```
+Typically, an internal route performs a few commands, but doesn't form a
+sequence that would normally be a complete chain of commands. In our
+simple case, the internal route just encapsulates a call to `web.Flush`.
 
-This sets the value of `who` to whatever value gets passed in from
-`Using().From().WithDefault()`, and it makes sure that this data is
-typed to a `string`.
+Note that it assumes that the context has a `message` value. Internal
+routes are often dependent on regular routes to supply information (in
+the form of context variables).
 
-`p.Get()` takes two parameters. The first is the name of the param that
-we want to get. The second is a default value. (If this method doesn't
-tickle your fance, check out `p.Has()`, which does not return a default
-value.)
+Other than these things, internal routes are the same as any other
+route.
 
-The second line formats a string and returns it:
+Now let's see how they are used.
 
-```go
-return fmt.Sprintf("Hello %s\n", who), nil
-```
+## Using "Includes"
 
-Since we have no errors, we always return `string, nil`.
-
-## Wiring Up Our New Command
-
-Now we can use our command from within a route. Here's our old "hello
-web" example re-tooled to use our command:
+One common way to use an internal route is to include it into another
+route using the `Includes()` method. In this chapter's code there are
+two routes that do this:
 
 ```go
 	registry.Route("GET /", "Print Hello to something").
-
 		Does(SayHello, "message").
 		Using("who").From("query:who").
+		Includes("@render")
 
-		Does(web.Flush, "out").
-		Using("content").From("cxt:message").
-		Using("contentType").WithDefault("text/plain")
-
+	// Another example route.
+	registry.Route("GET /hello", "Print Hello World").
+		Does(cookoo.AddToContext, "_").
+		Using("message").WithDefault("Hello World").
+		Includes("@render")
 ```
 
-I've added some empty lines to make it easier to visualize. Right now,
-the route `GET /` executes two commands in sequence:
+The first route is just a slightly modified version of the route we
+build in the previous chapter. But where we used to call the `web.Flush`
+command, we now call `Includes("@render")`. Effectively, this inlines
+the `@render` route into this chain of commands.
 
-1. `SayHello`
-2. `web.Flush`
+The second route ends the same way, by including `@render` into its
+chain of commands. This illustrates how internal routes can be re-used.
 
-Let's look at the spec for the first:
+**Note:** This second route also makes use of the built-in
+`cookoo.AddToContext` command, which inserts data directly into the
+context as name/value pairs. Every `Using().From().WithDefault()` clause
+attached to this command will result in a new pair being added to the
+context. It's a great way to populate a context with standard data.
 
-```go
-		Does(SayHello, "message").
-		Using("who").From("query:who").
-```
+Go ahead and run the exampels above. At this point the outcome should be
+predictable.
 
-By now, this should be pretty straightforward. The `SayHello` command
-will be executed. The `who` parameter will
-get set to the value of the query param `?who=XXX`.
+Later we will see how our `@render` route can be used to encapsulate
+more complex logic -- in our case, rendering data through HTML
+templates.
 
-But now something that was not important before is **very** important.
-*Now the name of the command matters.* By default, Cookoo will store the
-return value of a command inside of the `cookoo.Context`. And it's name
-will be the name of the command.
-
-So when `SayHello` executes, the return value will be put in
-`cxt:message` (since `SayHello`'s name is `message`).
-
-Now the second command will execute:
-
-```go
-		Does(web.Flush, "out").
-		Using("content").From("cxt:message").
-		Using("contentType").WithDefault("text/plain")
-```
-
-Notice the second line? We get `content` from `cxt:message`. So
-basically we are feeding data from the previous `SayHello` command into
-the `web.Flush` command.
-
-Let's run it and see what happens.
-
-```
-$ curl localhost:8080/?who=You
-Hello You
-$ curl localhost:8080/
-Hello World
-```
-
-Now we're starting to get into what makes Cookoo powerful: We can
-compose routes by chaining together commands. And just like we've used
-`web.Flush` over and over again, if we write our commands well we will
-be able to reuse them.
-
-The second nicety of the chain of commands style is that we can see at a
-glance what each route does without having to dive any deeper than the
-route declarations.
-
-In the next section, we'll look at how we can re-use route definitions
-themselves to simplify our chains.
+But first we will take a look at another concept similar to `Includes`,
+and that is *route forwarding*.
