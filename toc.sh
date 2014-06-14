@@ -7,5 +7,5 @@ echo "# Contents" > $DEST
 list=`git branch --list '*_*'`
 for i in $list; do
   echo $i
-  echo "1. [$i]($BASE/$i)" >> $DEST
+  echo "* [$i]($BASE/$i)" >> $DEST
 done
