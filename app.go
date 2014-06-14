@@ -11,6 +11,10 @@ func main() {
 	registry, router, context := cookoo.Cookoo()
 
 	// An internal route that cannot be accessed directly.
+	registry.Route("render", "Send a message to browser.").
+		Does(web.Flush, "out").
+		Using("content").From("cxt:message").
+		Using("contentType").WithDefault("text/plain")
 	registry.Route("@render", "Send a message to browser.").
 		Does(web.Flush, "out").
 		Using("content").From("cxt:message").
@@ -22,11 +26,26 @@ func main() {
 		Using("who").From("query:who").
 		Includes("@render")
 
-	// Another example route.
+	// Example of ForwardTo.
 	registry.Route("GET /hello", "Print Hello World").
 		Does(cookoo.AddToContext, "_").
 		Using("message").WithDefault("Hello World").
-		Includes("@render")
+		Does(cookoo.ForwardTo, "fwd").
+		Using("route").WithDefault("@render")
+
+	// Dynamic foward
+	registry.Route("GET /fwd", "Show a dynamic forward").
+		Does(cookoo.AddToContext, "_").
+		Using("message").WithDefault("Hello World").
+		Using("destination").WithDefault("@render").
+		Does(cookoo.ForwardTo, "fwd").
+		Using("route").From("cxt:destination")
+
+	// Use ForwardToRender to forward.
+	registry.Route("GET /custom", "Show custom ForwardToRender").
+		Does(cookoo.AddToContext, "_").
+		Using("message").WithDefault("Hello World").
+		Does(ForwardToRender, "fwd")
 
 
 	web.Serve(registry, router, context)
@@ -38,4 +57,8 @@ func SayHello(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt
 	who := p.Get("who", "World").(string)
 
 	return fmt.Sprintf("Hello %s\n", who), nil
+}
+
+func ForwardToRender(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
+	return nil, &cookoo.Reroute{"@render"}
 }
