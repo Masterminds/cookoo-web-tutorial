@@ -24,3 +24,5 @@ $ git checkout 1_Introduction
 
 And remember that at any time you can see the list of chapters by doing
 a `git branch --list`.
+
+[git checkout 1_Introduction](https://github.com/Masterminds/cookoo-web-tutorial/tree/1_Introduction)
