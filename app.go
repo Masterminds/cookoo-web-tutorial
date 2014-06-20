@@ -25,14 +25,15 @@ func main() {
 		Using("who").From("query:who").
 		Includes("@render")
 
-	// Core commands.
-	registry.Route("GET /core", "Example using core commands.").
-		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("This will get logged and rendered.").
-		Does(cookoo.LogMessage, "log").
-		Using("msg").From("cxt:message").
-		Does(cookoo.ForwardTo, "fwd").
-		Using("route").WithDefault("@render")
+	// Map the URI /files to the local path ./assets.
+	registry.Route("GET /files/**", "Return static files").
+		Does(web.ServeFiles, "file").
+		Using("directory").WithDefault("assets/")
+
+	registry.Route("GET /docs/**", "Return static files").
+		Does(web.ServeFiles, "file").
+		Using("directory").WithDefault("assets/").
+		Using("removePrefix").WithDefault("/docs")
 
 	prestart(registry, router, context)
 	web.Serve(registry, router, context)
