@@ -1,93 +1,163 @@
-# 9. Forwarding
+# 10. Built-in Commands
 
-In addition to including routes, it is also possible to forward from one
-route to another. In this chapter we will look at two ways of
-accomplishing it. The first is using the `cookoo.ForwardTo` command, and
-the second is creating a command that returns a `*cookoo.Reroute`.
+Over the last few chapters we have seen how to construct routes from
+commands. Here we'll take a quick breather and survey the main commands
+that come built-in to Cookoo.
 
-Forwarding is slightly different than including. Forwards are evaluated
-at the time that the route is run. This is slightly more dangerous (less
-pre-checking), it also gives us the possibility to embed route logic in
-an appropriate way.
+There are three "packages" of commands in Cookoo:
 
-The easiest way to forward a route is to use the `cookoo.ForwardTo` command:
+- Core: Commands that are directly in the `cookoo` package. These are
+  general-purpose commands.
+- CLI: These commands are in `cookoo/cli`, and are usually intended for
+  command-line applications. However, when you're building web servers
+  they can come in useful for handling application startup.
+- Web: Package `cookoo/web` has several useful and general-purpose web
+  oriented commands.
+
+Here we'll walk through the commands by name. The `app.go` version for
+this chapter shows how the core and CLI commands are used. The web
+commands we will see again in future chapters.
+
+**Note:** The Cookoo source often bundles up several commands into a
+file called `commands.go`. So if you're hunting for the source, look
+there first. Big commands sometimes get their own files, though.
+
+## Core Commands
+
+The following are all core commands:
+
+* `cookoo.AddToContext`: Add an arbitary name/value pair to the context.
+* `cookoo.LogMessage`: Log a message to the logging system. This is a
+  command wrapper around the `cookoo.Context.Log()` function.
+* `cookoo.ForwardTo`: This is used to forward from the current command
+  to another command. [The last chapter](https://github.com/Masterminds/cookoo-web-tutorial/tree/9_Forwarding)
+  covers this in more detail.
+
+Here's a simple example that uses all three commands:
 
 ```go
-	registry.Route("GET /hello", "Print Hello World").
+	// Core commands.
+	registry.Route("GET /core", "Example using core commands.").
 		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("Hello World").
+		Using("message").WithDefault("This will get logged and rendered.").
+		Does(cookoo.LogMessage, "log").
+		Using("msg").From("cxt:message").
 		Does(cookoo.ForwardTo, "fwd").
 		Using("route").WithDefault("@render")
 ```
 
-Functionally speaking, this produces the same result as doing an
-`Includes()` (though it doesn't really inline the route). But we can see
-the different between a `cookoo.ForwardTo` and an `Includes` with
-another example:
+It puts the name/value pair "message"/"This will get logged and
+rendered" into the context. Then it logs that message, and then it
+re-routes to the `@render` route that we defined in the previous
+chapter.
+
+**Note:** Cookoo has a thin logging system that piggy-backs atop the
+core Go logger. By default, log messages go to the standard output of
+the console that started the process. Later we'll look at logging in
+more detail.
+
+## CLI Commands
+
+The `cookoo/cli` package has the following commands:
+
+* `cli.ParseArgs` parses commaindline args and extracts flags. This is
+  closely related to the Go built-in `flag` package.
+* `cli.ShowHelp` is a convenience function for displaying help info when
+  the flag `-h` or `--help` is used.
+* `cli.RunSubcommand` is a utility for building a CLI with subcommand
+  support, like `git commit` or `go run`. It supports embedding flags
+  between commands, as Git does: `mycli -global-flag mysub -sub-flag`.
+* `cli.ShiftArgs` is a helper to work with `RunSubcommand` to support
+  multiple commands. It makes it easy to shift subcommands off of the
+  arguments list.
+
+Web applications often use the CLI library to add command line arguments
+to the main server command. Here's an example function, called
+`prestart`, that illustrates how the CLI library can be used to add
+command line flags to the server.
 
 ```go
-	// Dynamic foward
-	registry.Route("GET /fwd", "Show a dynamic forward").
-		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("Hello World").
-		Using("destination").WithDefault("@render").
-		Does(cookoo.ForwardTo, "fwd").
-		Using("route").From("cxt:destination")
-```
+// prestart parses CLI arguments and does any necessary context setup.
+func prestart (registry *cookoo.Registry, router *cookoo.Router, context cookoo.Context) {
+	// CLI commands.
 
-Note that in this case the destination is determined at runtime, not at
-build time. And with a little cleverness (and the `ignoreRoutes` param
-to `ForwardTo`) you can actually conditionally re-route.
+	// Create flags.
+	flags := flag.NewFlagSet("global", flag.PanicOnError)
+	flags.Bool("h", false, "Print help text")
 
-**Note:** Cookoo 1.1.0 and earlier did not allow forwarding to internal
-`@`-routes, though by omitting the `@` you could still forward to a
-route that was not exposed to the web server.
+	// Put the args into the context.
+	context.Put("os.Args", os.Args)
 
-## Writing Our Own Forwarding
+	// Define a pre-start route.
+	registry.Route("prestart", "Do some stuff before starting the webserver.").
+		// Shift the name off of the front of os.Args.
+		Does(cli.ShiftArgs, "_").Using("n").WithDefault(1).
 
-What `ForwardTo` does is actually trivial in Cookoo, and we can do it
-with a very simple command:
+		// Parse the CLI arguments.
+		Does(cli.ParseArgs, "Parse CLI arguments").
+		Using("flagset").WithDefault(flags).
+		Using("args").From("cxt:os.Args").
 
-```go
-func ForwardToRender(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
-	return nil, &cookoo.Reroute{"@render"}
+		// Show help if -h (cxt:h) was set.
+		Does(cli.ShowHelp, "showHelp").
+		Using("show").From("cxt:h").
+		Using("summary").WithDefault("Run a demo web app server.").
+		Using("usage").WithDefault("go run app.go").
+		Using("flags").WithDefault(flags).
+
+		// Log a startup message.
+		Does(cookoo.LogMessage, "starting").
+		Using("msg").WithDefault("Starting...")
+
+	// Run the prestart route.
+	router.HandleRequest("prestart", context, false)
+
+	// If help mode (-h) was on, we should stop now.
+	if context.Get("showHelp", false).(bool) {
+		os.Exit(0)
+	}
 }
 ```
 
-The above always Forwards to the `@render` command. It uses a feature we
-haven't explored yet. Cookoo commands return a `cookoo.Interrupt`. And
-based on the type of interrupt, Cookoo may perform different actions.
-Here are the main interrupt types:
+There is quite a bit going on above. Here's the summary:
 
-* `error`: Processing of the current chain stops and the error is
-  reported. For the Cookoo web server, a `500` error is returned.
-* `cookoo.FatalError`: Produces the same result as above, but with a
-  different error message. If you can, you should return `FatalError`
-  when the cause of the error is known.
-* `cookoo.RecoverableError`: Cookoo logs the error and then continues to
-  the next command on the chain. It does not interrupt processing.
-* `cookoo.Stop`: Cookoo stops processing the chain of commands, but does
-  not report an error. For the web server, no result is returned.
-* `cookoo.Reroute`: Cookoo stops processing the current chain and
-  attempts to jump to the route given to `Reroute`. This is what we're
-  doing here.
+1. Create a `flag.FlagSet` and add the `-h` flag to turn on help text.
+2. Add `os.Args` to the context so that Cookoo can access them easily.
+3. Create the `prestart` route, which does the following:
+  * Shift off the first value from `os.Args` (which is always the
+    command name).
+  * Parse `os.Args`, given the `flag.FlagSet` we already defined.
+  * If the `-h` flag was true, display the help text and stop.
+  * (If there is no `-h` flag) log a message: `Starting...`
+4. Finally, run the `prestart` route that we just defined.
 
-So when our example command returns a `*cookoo.Reroute`, it is
-essentially telling Cookoo to jump to a different route and run it.
+Note that we can manually run routes (`router.HandleRequest`) and then
+later hand the router over to `web.Serve()` to serve HTTP requests.
+Being able to manually run routes like this is good for start and stop
+handlers, launching auxilliary goroutines, and also running automated
+tests.
 
-During a reroute, the context is passed along, too. So any variables we
-put into the context will be available on the route we jump to.
+**Note:** One common use for using a `prestart` setup like this is to
+pass configuration data (like a JSON or YAML file) into Cookoo.
 
-Now we can put our `ForwardToReroute` command to work:
+## Web Commands
 
-```go
-	registry.Route("GET /custom", "Show custom ForwardToRender").
-		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("Hello World").
-		Does(ForwardToRender, "fwd")
-```
+Finally, we'll take a look at some of the web-specific commands in the
+package `cookoo/web`.
 
-The result of this route is the same as the other two.
+* `web.Flush` sends the content back to the web client (or to another
+   `io.Writer` if specified).
+* `web.RenderHTML` takes a template and renders it through the HTML
+  renderer. We will see this in a future chapter.
+* `web.ServerInfo` is for debugging. It dumps both the request and the
+  response objects to the client.
+* `web.ServeFiles` takes a directory and serves the files in that
+  directory. This is an easy way to add support for serving images or
+  other pieces of static content.
 
+Additionally, the package `cookoo/web/auth` has commands that implement
+HTTP Basic Authentication so you can provide users with basic login and
+password protection.
 
-
+In the next chapter we will look at serving static files. This will pave
+the way for a future chapter on using `web.RenderHTML` and Go templates.

@@ -2,7 +2,10 @@ package main
 
 import (
 	"github.com/Masterminds/cookoo"
+	"github.com/Masterminds/cookoo/cli"
 	"github.com/Masterminds/cookoo/web"
+	"os"
+	"flag"
 	"fmt"
 )
 
@@ -11,10 +14,6 @@ func main() {
 	registry, router, context := cookoo.Cookoo()
 
 	// An internal route that cannot be accessed directly.
-	registry.Route("render", "Send a message to browser.").
-		Does(web.Flush, "out").
-		Using("content").From("cxt:message").
-		Using("contentType").WithDefault("text/plain")
 	registry.Route("@render", "Send a message to browser.").
 		Does(web.Flush, "out").
 		Using("content").From("cxt:message").
@@ -26,28 +25,16 @@ func main() {
 		Using("who").From("query:who").
 		Includes("@render")
 
-	// Example of ForwardTo.
-	registry.Route("GET /hello", "Print Hello World").
+	// Core commands.
+	registry.Route("GET /core", "Example using core commands.").
 		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("Hello World").
+		Using("message").WithDefault("This will get logged and rendered.").
+		Does(cookoo.LogMessage, "log").
+		Using("msg").From("cxt:message").
 		Does(cookoo.ForwardTo, "fwd").
 		Using("route").WithDefault("@render")
 
-	// Dynamic foward
-	registry.Route("GET /fwd", "Show a dynamic forward").
-		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("Hello World").
-		Using("destination").WithDefault("@render").
-		Does(cookoo.ForwardTo, "fwd").
-		Using("route").From("cxt:destination")
-
-	// Use ForwardToRender to forward.
-	registry.Route("GET /custom", "Show custom ForwardToRender").
-		Does(cookoo.AddToContext, "_").
-		Using("message").WithDefault("Hello World").
-		Does(ForwardToRender, "fwd")
-
-
+	prestart(registry, router, context)
 	web.Serve(registry, router, context)
 }
 
@@ -59,6 +46,42 @@ func SayHello(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt
 	return fmt.Sprintf("Hello %s\n", who), nil
 }
 
-func ForwardToRender(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
-	return nil, &cookoo.Reroute{"@render"}
+// prestart parses CLI arguments and does any necessary context setup.
+func prestart (registry *cookoo.Registry, router *cookoo.Router, context cookoo.Context) {
+	// Create flags.
+	flags := flag.NewFlagSet("global", flag.PanicOnError)
+	flags.Bool("h", false, "Print help text")
+
+	// Put the args into the context.
+	context.Put("os.Args", os.Args)
+
+	// Define a pre-start route.
+	registry.Route("prestart", "Do some stuff before starting the webserver.").
+		// Shift the name off of the front of os.Args.
+		Does(cli.ShiftArgs, "_").Using("n").WithDefault(1).
+
+		// Parse the CLI arguments.
+		Does(cli.ParseArgs, "Parse CLI arguments").
+		Using("flagset").WithDefault(flags).
+		Using("args").From("cxt:os.Args").
+
+		// Show help if -h (cxt:h) was set.
+		Does(cli.ShowHelp, "showHelp").
+		Using("show").From("cxt:h").
+		Using("summary").WithDefault("Run a demo web app server.").
+		Using("usage").WithDefault("go run app.go").
+		Using("flags").WithDefault(flags).
+
+		// Log a startup message.
+		Does(cookoo.LogMessage, "starting").
+		Using("msg").WithDefault("Starting...")
+
+	// Run the prestart route.
+	router.HandleRequest("prestart", context, false)
+
+	// If help mode (-h) was on, we should stop now.
+	if context.Get("showHelp", false).(bool) {
+		os.Exit(0)
+	}
 }
+
